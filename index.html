@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dunnhumby Automation</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="main-container">
+      <div class="app-header">
+        <img src="img/logo.png" alt="Humby Logo" class="app-logo" />
+        <h3>Dunnhumby Automation</h3>
+      </div>
+
+      <div class="main-sections-container">
+        <div class="section-row">
+          <label class="title-label">Download export files:</label>
+          <button id="downloadExportButton" class="action-button">
+            Download
+          </button>
+        </div>
+
+        <div class="section-row">
+          <label id="filePathLabel" class="title-label"
+            >Upload file: No file selected</label
+          >
+          <button id="uploadBrowseButton" class="action-button">Browse</button>
+        </div>
+      </div>
+      <!-- this need to be dynamic -->
+      <div class="status-bar">
+        <label id="statusLabel" class="status-text">Status: Idle</label>
+      </div>
+
+      <div class="sales-download-container">
+        <label class="title-label sales">To ONLY download sales file:</label>
+        <button
+          id="downloadSalesButton"
+          class="action-button secondary-button"
+          title="If close the program and final download didn't complete, keep downloading the sale file though here."
+        >
+          Download Sales File
+        </button>
+      </div>
+
+      <div id="errorOverlay" class="error-overlay hidden">
+        <div class="error-header">
+          <span class="error-icon">⚠️</span>
+          <span class="error-title">IMPORT ERROR</span>
+        </div>
+        <p id="errorMessage" class="error-message">
+          An error occurred during import
+        </p>
+        <button id="errorCloseButton" class="error-close-button">Close</button>
+      </div>
+    </div>
+    <script src="renderer.js"></script>
+  </body>
+</html>

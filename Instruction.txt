@@ -1,0 +1,65 @@
+npm init -y
+npm install electron --save-dev
+create main.js
+
+to compile it
+npm install electron-builder --save-dev
+npm install electron-builder@latest
+
+npm run dist (in Admin mode)
+
+update package.json
+{
+  "name": "dunnhumby",
+  "version": "4.0.0",
+  "description": "Nestle Dunnhumby Automation Tool",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder",
+    "build-my-app": "DumhumbyAuto"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "electron": "^37.2.5",
+    "electron-builder": "^26.0.12"
+  },
+  "dependencies": {
+    "adm-zip": "^0.5.16",
+    "dotenv": "^17.2.1",
+    "exceljs": "^4.4.0",
+    "playwright": "^1.54.2"
+  },
+  "build": {
+    "appId": "com.ChrisH.electronhumby",
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "img/logo.ico"
+    },
+        "asarUnpack": [
+      "node_modules/playwright/**/*",
+      "node_modules/playwright-core/**/*"
+    ],
+    "extraResources": [
+      {
+        "from":".env",
+        "to": "."
+      },
+      {
+        "from": "python/excel.exe",
+        "to": "python/excel.exe"
+      }
+        ],
+    "extraFiles": [
+      ".env"
+    ]
+  }
+}
+

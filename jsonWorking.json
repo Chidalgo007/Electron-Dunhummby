@@ -1,0 +1,67 @@
+{
+  "name": "dunnhumby",
+  "version": "4.4.5",
+  "description": "Nestle Dunnhumby Automation Tool",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "postinstall": "node postinstall.js && playwright install chromium",
+    "build": "electron-builder && playwright install chromium && electron-builder",
+    "build-win": "electron-builder --win",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "electron": "^37.2.5",
+    "electron-builder": "^26.0.12"
+  },
+  "dependencies": {
+    "adm-zip": "^0.5.16",
+    "dotenv": "^17.2.1",
+    "exceljs": "^4.4.0",
+    "playwright": "^1.54.2"
+  },
+  "build": {
+    "appId": "com.ChrisH.dunnhumby",
+    "productName": "Dunhumby Automation",
+    "win": {
+      "target": "portable",
+      "icon": "img/logo.ico"
+    },
+    "files": [
+      "**/*",
+      "!node_modules/playwright/.local-browsers/**/*",
+      "node_modules/playwright/.local-browsers/chromium-*/chrome-win/**/*",
+      ".env"
+    ],
+    "asarUnpack": [
+    "node_modules/playwright/**/*",
+    "node_modules/playwright-core/**/*",
+    "node_modules/@playwright/**/*"
+    ],
+    "extraResources": [
+      {
+        "from":".env",
+        "to": "."
+      },
+      {
+      "from": "node_modules/playwright-core/.local-browsers",
+      "to": "playwright-browsers",
+      "filter": ["chromium-*/**/*"]
+
+      },
+      {
+        "from": "python/excel.exe",
+        "to": "python/excel.exe"
+      }
+        ],
+    "extraFiles": [
+      ".env"
+    ]
+  }
+}
