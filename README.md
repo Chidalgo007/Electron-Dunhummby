@@ -41,5 +41,5 @@ This project is a fully automated **three-step data processing workflow** design
 ## 🎯 Impact  
 By merging **web navigation, file management, and data transformation** into one cohesive tool, this program transforms a **multi-hour, error-prone process** into a **hands-free, efficient pipeline**—freeing up time for higher-value tasks.  
 
-<img src=""/>
-<img src=""/>
+<img src="https://raw.githubusercontent.com/Chidalgo007/Electron-Dunhummby/refs/heads/main/img/d1.png"/>
+<img src="https://raw.githubusercontent.com/Chidalgo007/Electron-Dunhummby/refs/heads/main/img/d2.png"/>
