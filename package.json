@@ -1,6 +1,6 @@
 {
   "name": "dunnhumby",
-  "version": "4.4.6",
+  "version": "4.5.1",
   "description": "Nestle Dunnhumby Automation Tool",
   "main": "main.js",
   "scripts": {
@@ -16,13 +16,15 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "electron": "^37.2.5",
+    "electron": "^38.1.0",
     "electron-builder": "^26.0.12"
   },
   "dependencies": {
     "adm-zip": "^0.5.16",
     "dotenv": "^17.2.1",
+    "electron-store": "^10.1.0",
     "exceljs": "^4.4.0",
+    "keytar": "^7.9.0",
     "playwright": "^1.54.2"
   },
   "build": {
@@ -34,21 +36,13 @@
     },
     "files": [
       "**/*",
-      ".env",
       "!node_modules/playwright/.local-browsers/**/*"
     ],
     "extraResources": [
       {
-        "from": ".env",
-        "to": "."
-      },
-      {
         "from": "python/excel.exe",
         "to": "python/excel.exe"
       }
-    ],
-    "extraFiles": [
-      ".env"
     ]
   }
 }

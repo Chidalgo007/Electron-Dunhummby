@@ -2,19 +2,14 @@
 const { app, BrowserWindow, ipcMain, dialog } = require("electron");
 const path = require("path");
 const fs = require("fs");
-const dotenv = require("dotenv");
+const Store = require("electron-store").default;
+const store = new Store();
 
-// Load environment variables AFTER basic Node.js modules are imported
-const envPath = app.isPackaged
-  ? path.join(process.resourcesPath, ".env") // Production
-  : path.resolve(__dirname, ".env"); // Development
-
-if (fs.existsSync(envPath)) {
-  dotenv.config({ path: envPath });
-  console.log("[ENV] Loaded from:", envPath);
-} else {
-  console.warn("[WARNING] .env file not found at:", envPath);
-}
+// keytar credentials
+const keytar = require("keytar");
+const SERVICE_NAME = "DunnhumbyAutomation"; // unique name for Windows Vault
+const LOGIN_URL =
+  "https://sso.dunnhumby.com/adfs/ls/?wtrealm=https%3A%2F%2Fgb.clientportal.a.dunnhumby.com%2FFNZ%2Fweb%2F&wctx=WsFedOwinState%3DRmcFwQLSZNgNN5RZWbnSwbrCXQfEC6HxfGNmQfhhVqowKaXaGibS_Kq1vFnfbVjLZHGgZFy1cda2OjbrwY2raGP4ydD87Zwp0XNOV6Lce_FHTrCQvxFgYRPgX5jGZaWiWeMYqA&wa=wsignin1.0&wreply=https%3A%2F%2Fgb.clientportal.a.dunnhumby.com%2FFNZ%2Fweb%2F";
 
 // NOW import playwright and other dependencies
 const playwright = require("playwright");
@@ -28,10 +23,11 @@ const user_data_dir = path.join(app.getPath("userData"), "user-data");
 const unzipFile = require("./unzipUtils");
 const { cleanupExtractedFiles } = require("./cleanUp.js");
 const { runPythonExcelUpdate } = require("./excelUtils");
+const { moveFileToDestination } = require("./moveToDestination.js");
 
 // for sales file download iteration
-const CHECK_INTERVAL_MS = 1 * 60 * 60 * 1000; // 1 hour in milliseconds
-const MAX_DOWNLOAD_ATTEMPTS = 5; // Or whatever number of attempts you deem appropriate
+const CHECK_INTERVAL_MS = 1 * 90 * 60 * 1000; // 1 hour in milliseconds
+const MAX_DOWNLOAD_ATTEMPTS = 5; // number of attempts
 
 let mainWindow;
 let browserContext = null;
@@ -90,11 +86,10 @@ const createWindow = () => {
       contextIsolation: false,
     },
     resizable: false,
-    autoHideMenuBar: true,
+    // autoHideMenuBar: true,
   });
 
   mainWindow.loadFile("index.html");
-  // mainWindow.webContents.openDevTools();
 };
 
 app.whenReady().then(() => {
@@ -120,13 +115,14 @@ app.on("window-all-closed", async () => {
 // --- Core Automation Functions ---
 
 async function loginHumby() {
-  const username = process.env.EMAIL;
-  const password = process.env.PASSWORD;
-  const loginUrl = process.env.LOGIN_URL;
+  const creds = {
+    username: await keytar.getPassword(SERVICE_NAME, "username"),
+    password: await keytar.getPassword(SERVICE_NAME, "password"),
+  };
+  const loginUrl = LOGIN_URL;
 
-  if (!username || !password || !loginUrl) {
-    const msg =
-      "Environment variables EMAIL, PASSWORD, or LOGIN_URL are not set or are empty.";
+  if (!creds.username || !creds.password || !loginUrl) {
+    const msg = "Credentials or login URL missing. Please set them.";
     console.error(msg);
     mainWindow.webContents.send("automation-error", msg, "Configuration Error");
     return null;
@@ -180,8 +176,8 @@ async function loginHumby() {
     mainWindow.webContents.send("update-status", "Entering credentials...");
 
     await currentPage.fill("#userNameInput", "");
-    await currentPage.fill("#userNameInput", username, { timeout: 5000 });
-    await currentPage.fill("#passwordInput", password, { timeout: 5000 });
+    await currentPage.fill("#userNameInput", creds.username, { timeout: 5000 });
+    await currentPage.fill("#passwordInput", creds.password, { timeout: 5000 });
     await currentPage.click("#submitButton");
 
     await currentPage.waitForSelector("text=Reports", { timeout: 20000 });
@@ -293,6 +289,60 @@ async function selectGroupSelectionForPowerBi(page) {
   }
 }
 
+// helper function to select and download files from message center
+async function waitForInboxIncrease(
+  page,
+  increaseBy = 2,
+  timeoutMs = 300000,
+  refreshIntervalMs = 30000
+) {
+  const start = Date.now();
+
+  // Read initial count
+  const inboxLocator = page.locator("span#dh-header-inbox");
+  let initialCount = parseInt(
+    (await inboxLocator.getAttribute("data-count")) || "0",
+    10
+  );
+  const targetCount = initialCount + increaseBy;
+
+  console.log(
+    `📩 Starting inbox count: ${initialCount}, waiting until >= ${targetCount}`
+  );
+
+  while (Date.now() - start < timeoutMs) {
+    try {
+      // Refresh the page so the counter updates
+      await page.reload({ waitUntil: "networkidle" });
+      await page.waitForTimeout(3000); // buffer
+
+      const currentCount = parseInt(
+        (await inboxLocator.getAttribute("data-count")) || "0",
+        10
+      );
+      console.log(`🔄 Checked inbox: data-count=${currentCount}`);
+
+      if (currentCount >= targetCount) {
+        console.log(
+          `✅ Inbox count reached ${currentCount}, target was ${targetCount}`
+        );
+        return true;
+      }
+    } catch (err) {
+      console.warn("⚠️ Error while checking inbox count:", err.message);
+    }
+
+    // Wait before next refresh
+    await page.waitForTimeout(refreshIntervalMs);
+  }
+
+  throw new Error(
+    `❌ Inbox count did not increase by ${increaseBy} within ${
+      timeoutMs / 1000 / 60
+    } minutes`
+  );
+}
+
 /**
  * Translates select_file_for_download function from provided snippet.
  * Navigates to message center, reloads, handles iframe, and clicks message links for downloads.
@@ -310,15 +360,18 @@ async function selectFileForDownload(page) {
   try {
     await page.waitForTimeout(10000); // Wait for 10 seconds to ensure files are ready
 
-    // Click on the message center icon
+    // Refresh the page to ensure new messages appear
+    await page.reload({ waitUntil: "networkidle" });
+
+    // Wait up to 5 minutes (300000 ms) for data-count=2, refresh every 30s
+    await waitForInboxIncrease(page, 2, 600000, 20000);
+
+    // Once ready, click the message center icon
     await page.locator("a:has(span#dh-header-inbox)").click();
 
     // Wait for the page to load completely after clicking message center
     await page.waitForLoadState("networkidle", { timeout: 30000 });
-    await page.waitForTimeout(10000); // wait 10 sec after reload, to ensure messages are loaded
-
-    // Refresh the page to ensure new messages appear
-    await page.reload({ waitUntil: "networkidle" });
+    await page.waitForTimeout(5000); // wait 5 sec after reload, to ensure messages are loaded
 
     // Wait for the iframe with file to download to appear
     const iframeElement = await page.waitForSelector("iframe#messages-frame", {
@@ -696,6 +749,42 @@ async function importFile(page, filePath) {
       );
       await expandIfNeeded(page);
       await resubmitReport(page);
+
+      // small buffer before checking status
+      await page.waitForTimeout(5000);
+      await page.reload({ waitUntil: "networkidle" });
+      // === begin resubmit check loop ===
+      let running = false;
+      const timeoutMs = 300000; // 5 min timeout
+      const start = Date.now();
+
+      while (!running && Date.now() - start < timeoutMs) {
+        // reload page to get updated status
+        await page.reload({ waitUntil: "networkidle" });
+        await page.waitForTimeout(5000); // small buffer
+
+        const row = page.locator("table tbody tr").nth(0);
+        const status_icon = row.locator('span[ng-show="!!objstatus"].icon');
+        const status_text =
+          (await status_icon.getAttribute("uib-tooltip")) || "";
+
+        console.log(`📊 Current status: ${status_text}`);
+
+        if (status_text.toUpperCase().startsWith("RUNNING")) {
+          running = true;
+        } else {
+          console.log("⚠️ Status not RUNNING, resubmitting...");
+          await resubmitReport(page);
+        }
+      }
+
+      if (!running) {
+        throw new Error(
+          "❌ Report never reached RUNNING status after resubmit."
+        );
+      }
+      // === end resubmit check loop ===
+
       mainWindow.webContents.send(
         "update-status",
         "Report resubmitted after import."
@@ -849,11 +938,13 @@ async function fileAvailable(page) {
  */
 async function runCheck(context) {
   // login with context
-  const username = process.env.EMAIL;
-  const password = process.env.PASSWORD;
-  const loginUrl = process.env.LOGIN_URL;
+  const creds = {
+    username: await keytar.getPassword(SERVICE_NAME, "username"),
+    password: await keytar.getPassword(SERVICE_NAME, "password"),
+  };
+  const loginUrl = LOGIN_URL;
 
-  if (!username || !password || !loginUrl) {
+  if (!creds.username || !creds.password || !loginUrl) {
     const msg =
       "Environment variables EMAIL, PASSWORD, or LOGIN_URL are not set or are empty.";
     console.error(msg);
@@ -875,8 +966,8 @@ async function runCheck(context) {
     mainWindow.webContents.send("update-status", "Entering credentials...");
 
     await page.fill("#userNameInput", "");
-    await page.fill("#userNameInput", username, { timeout: 5000 });
-    await page.fill("#passwordInput", password, { timeout: 5000 });
+    await page.fill("#userNameInput", creds.username, { timeout: 5000 });
+    await page.fill("#passwordInput", creds.password, { timeout: 5000 });
     await page.click("#submitButton");
 
     await page.waitForSelector("text=Reports", { timeout: 20000 });
@@ -1085,8 +1176,17 @@ ipcMain.on("start-download-sales-file", async (event, args) => {
             downloadsFolder
           );
 
-          if (finalFilePath) {
-            console.log(`✅ File cleaned up and renamed to: ${finalFilePath}`);
+          const destinationFolder = store.get("destinationFolder") || null;
+          let destinationFilePath = null;
+          destinationFilePath = await moveFileToDestination(
+            finalFilePath,
+            destinationFolder
+          );
+
+          if (destinationFilePath) {
+            console.log(
+              `✅ File cleaned up and renamed to: ${destinationFilePath}`
+            );
 
             // Delete the original zip file
             if (fs.existsSync(downloadedPath)) {
@@ -1098,14 +1198,17 @@ ipcMain.on("start-download-sales-file", async (event, args) => {
             mainWindow.webContents.send(
               "download-finished",
               true,
-              "Sales file downloaded, extracted, and cleaned up successfully.",
-              finalFilePath
+              "Sales file downloaded, extracted, and cleaned up, and moved to destination successfully.",
+              destinationFilePath
             );
             console.log(
               "✅ Sales file download, cleanup, and GUI signaling complete."
             );
           } else {
-            throw new Error("Failed to cleanup extracted files");
+            throw new Error(
+              "Failed to move file to destination folder.\n file is at: " +
+                finalFilePath
+            );
           }
         } catch (cleanupError) {
           console.error("❌ Error during file cleanup:", cleanupError.message);
@@ -1131,9 +1234,18 @@ ipcMain.on("start-download-sales-file", async (event, args) => {
 
       // 📅 Call FSCalendar.xlsx update function
 
+      // get path to FSCalendar.xlsx from electron-store
+      const excelPath = store.get("fcCalendar") || "";
+      console.log(`📅 Starting FSCalendar.xlsx update process...`);
+
       try {
-        const result = await runPythonExcelUpdate();
-        calendarMessage = `FSCalendar.xlsx updated successfully. ${result}`;
+        if (!excelPath || !fs.existsSync(excelPath)) {
+          throw new Error(`Excel file not found at path: ${excelPath}`);
+        } else {
+          console.log(`📅 Found Excel file at path: ${excelPath}`);
+          const result = await runPythonExcelUpdate(excelPath);
+          calendarMessage = `FSCalendar.xlsx updated successfully. ${result}`;
+        }
       } catch (err) {
         calendarMessage = `FSCalendar update failed: ${err}`;
       }
@@ -1175,4 +1287,67 @@ ipcMain.on("start-download-sales-file", async (event, args) => {
       browserContext = null; // Always nullify the global variable
     }
   }
+});
+
+ipcMain.handle("save-credentials", async (event, { username, password }) => {
+  try {
+    await keytar.setPassword(SERVICE_NAME, "username", username);
+    await keytar.setPassword(SERVICE_NAME, "password", password);
+    return { success: true, message: "Credentials saved securely." };
+  } catch (err) {
+    return { success: false, message: err.message };
+  }
+});
+
+ipcMain.handle("get-credentials", async () => {
+  try {
+    const username = await keytar.getPassword(SERVICE_NAME, "username");
+    const password = await keytar.getPassword(SERVICE_NAME, "password");
+    return { username, password };
+  } catch (err) {
+    return { username: null, password: null, error: err.message };
+  }
+});
+
+// listen for folder selection
+ipcMain.handle("select-folder", async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ["openDirectory"],
+  });
+
+  if (result.canceled) return null;
+  return result.filePaths[0];
+});
+
+// listen for excel file selection
+ipcMain.handle("select-excel-file", async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ["openFile"],
+    filters: [{ name: "Excel Files", extensions: ["xlsx", "xls"] }],
+  });
+
+  if (result.canceled) return null;
+  return result.filePaths[0];
+});
+
+// Save Excel and Destination folder paths
+ipcMain.handle(
+  "save-paths",
+  async (event, { fcCalendar, destinationFolder }) => {
+    try {
+      store.set("fcCalendar", fcCalendar);
+      store.set("destinationFolder", destinationFolder);
+      return { success: true, message: "Paths saved successfully." };
+    } catch (err) {
+      return { success: false, message: err.message };
+    }
+  }
+);
+
+// Get Excel and Destination folder paths
+ipcMain.handle("get-paths", async () => {
+  return {
+    fcCalendar: store.get("fcCalendar") || "",
+    destinationFolder: store.get("destinationFolder") || "",
+  };
 });

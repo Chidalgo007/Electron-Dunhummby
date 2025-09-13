@@ -11,6 +11,13 @@ document.addEventListener("DOMContentLoaded", () => {
   const errorOverlay = document.getElementById("errorOverlay");
   const errorMessage = document.getElementById("errorMessage");
   const errorCloseButton = document.getElementById("errorCloseButton");
+  const credsModal = document.getElementById("credentialsModal");
+  const closeCredsModal = document.getElementById("closeCredsModal");
+  const saveCredsButton = document.getElementById("saveCredsButton");
+  const usernameInput = document.getElementById("usernameInput");
+  const passwordInput = document.getElementById("passwordInput");
+  const fcCalendar = document.getElementById("FSCalendar");
+  const destinationFolder = document.getElementById("destinationFolder");
 
   let selectedFile = null; // To store the path of the selected file
 
@@ -18,8 +25,15 @@ document.addEventListener("DOMContentLoaded", () => {
   function updateStatus(message, type = "info") {
     if (statusLabel) {
       statusLabel.textContent = `Status: ${message}`;
-      if (type === "error") {
-        statusLabel.style.color = "red";
+      switch (type) {
+        case "error":
+          statusLabel.style.color = "red";
+          break;
+        case "success":
+          statusLabel.style.color = "green";
+          break;
+        default:
+          statusLabel.style.color = "rgb(131, 107, 208)"; // Default color
       }
     } else {
       console.log(`Status update: ${message}`);
@@ -172,5 +186,74 @@ document.addEventListener("DOMContentLoaded", () => {
       showImportError(message, "Sales Download Error");
     }
     setButtonsEnabled(true); // Re-enable buttons after completion
+  });
+
+  // ======= Credentials creation and retrieval ===========
+  // open modal from a menu/settings button
+  const openCredsButton = document.getElementById("openCredsButton");
+  openCredsButton.addEventListener("click", () => {
+    credsModal.classList.remove("hidden");
+  });
+
+  // Close modal
+  closeCredsModal.addEventListener("click", () => {
+    credsModal.classList.add("hidden");
+  });
+
+  // Load stored creds on startup
+  ipcRenderer.invoke("get-credentials").then((creds) => {
+    if (creds.username) usernameInput.value = creds.username;
+    if (creds.password) passwordInput.value = creds.password;
+  });
+
+  // Save creds
+  saveCredsButton.addEventListener("click", async () => {
+    const username = usernameInput.value;
+    const password = passwordInput.value;
+    const result = await ipcRenderer.invoke("save-credentials", {
+      username,
+      password,
+    });
+    const storeResult = await ipcRenderer.invoke("save-paths", {
+      fcCalendar: fcCalendar.value,
+      destinationFolder: destinationFolder.value,
+    });
+    if (result.success && storeResult.success) {
+      updateStatus("✅ Credentials and paths saved.");
+      credsModal.classList.add("hidden");
+    } else {
+      updateStatus(`❌ Failed to save: ${result.message}`, "error");
+    }
+  });
+
+  // Load stored folder and calendar on startup
+  document
+    .getElementById("browseFolderButton")
+    .addEventListener("click", async () => {
+      const folderPath = await ipcRenderer.invoke("select-folder");
+      if (folderPath) {
+        destinationFolder.value = folderPath;
+      } else {
+        destinationFolder.value = "No folder selected";
+      }
+    });
+
+  // Select path for FSCalendar
+  document
+    .getElementById("browseExcelButton")
+    .addEventListener("click", async () => {
+      const excelPath = await ipcRenderer.invoke("select-excel-file");
+      if (excelPath) {
+        fcCalendar.value = excelPath;
+      } else {
+        fcCalendar.value = "No folder selected";
+      }
+    });
+
+  // Load stored paths on startup
+  ipcRenderer.invoke("get-paths").then((paths) => {
+    if (paths.fcCalendar) fcCalendar.value = paths.fcCalendar;
+    if (paths.destinationFolder)
+      destinationFolder.value = paths.destinationFolder;
   });
 });

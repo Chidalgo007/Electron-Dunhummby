@@ -11,6 +11,9 @@
       <div class="app-header">
         <img src="img/logo.png" alt="Humby Logo" class="app-logo" />
         <h3>Dunnhumby Automation</h3>
+        <button id="openCredsButton" class="settings-btn" title="Settings">
+          ⚙️
+        </button>
       </div>
 
       <div class="main-sections-container">
@@ -54,6 +57,33 @@
         </p>
         <button id="errorCloseButton" class="error-close-button">Close</button>
       </div>
+      <!-- Credentials button -->
+      <div id="credentialsModal" class="modal-overlay hidden">
+        <div class="modal-content">
+          <button id="closeCredsModal" class="close-btn">❌</button>
+          <p class="modal-title">Enter Credentials</p>
+          <hr class="divider" />
+          <input id="usernameInput" type="text" placeholder="Email" />
+          <input id="passwordInput" type="password" placeholder="Password" />
+
+          <div class="input-container">
+            <input
+              id="destinationFolder"
+              type="text"
+              placeholder="Destination Folder"
+            />
+            <button id="browseFolderButton" class="browse-btn">📁</button>
+          </div>
+
+          <div class="input-container">
+            <input id="FSCalendar" type="text" placeholder="FS Calendar" />
+            <button id="browseExcelButton" class="browse-btn">📁</button>
+          </div>
+
+          <button id="saveCredsButton" class="modal-button">Save</button>
+        </div>
+      </div>
+      <!-- end Credentials button -->
     </div>
     <script src="renderer.js"></script>
   </body>

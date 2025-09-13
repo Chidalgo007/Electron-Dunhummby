@@ -1,19 +1,19 @@
-// utils/excelUtils.js
 const { execFile } = require("child_process");
 const path = require("path");
 
-function runPythonExcelUpdate() {
+function runPythonExcelUpdate(filePath) {
   return new Promise((resolve, reject) => {
-    const exePath = path.join(__dirname, "python", "excel.exe"); // python executable name
-    console.log(`🔄 Attempting to run: ${exePath}`); // Debug log
+    const exePath = path.join(__dirname, "python", "excel.exe"); // your Python exe
+    console.log(`🔄 Attempting to run: ${exePath} with arg: ${filePath}`);
 
-    execFile(exePath, (error, stdout, stderr) => {
-      console.log(`Python stdout: ${stdout}`); // Debug log
-      console.log(`Python stderr: ${stderr}`); // Debug log
+    // Pass filePath as an argument to python.exe
+    execFile(exePath, [filePath], (error, stdout, stderr) => {
+      console.log(`Python stdout: ${stdout}`);
+      console.log(`Python stderr: ${stderr}`);
       if (error) {
-        return reject(`Python error: ${stderr || error.message}`);
+        return reject(`Python error: ${false}`);
       }
-      resolve(stdout.trim());
+      resolve(true);
     });
   });
 }
