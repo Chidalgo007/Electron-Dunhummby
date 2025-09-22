@@ -86,7 +86,7 @@ const createWindow = () => {
       contextIsolation: false,
     },
     resizable: false,
-    // autoHideMenuBar: true,
+    autoHideMenuBar: true,
   });
 
   mainWindow.loadFile("index.html");
@@ -165,7 +165,7 @@ async function loginHumby() {
       );
     }
 
-    currentPage = await browserContext.newPage();
+    currentPage = await browserContext.pages()[0];
     console.log(`Navigating to login URL: ${loginUrl}`);
     mainWindow.webContents.send("update-status", "Navigating to login page...");
 
@@ -955,7 +955,7 @@ async function runCheck(context) {
   let page = null;
   try {
     // Create a new page from the provided context
-    page = await context.newPage();
+    page = await context.pages()[0];
     console.log(`Navigating to login URL: ${loginUrl}`);
     mainWindow.webContents.send("update-status", "Navigating to login page...");
 

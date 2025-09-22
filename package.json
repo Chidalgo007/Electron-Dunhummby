@@ -1,6 +1,6 @@
 {
   "name": "dunnhumby",
-  "version": "4.5.1",
+  "version": "4.5.2",
   "description": "Nestle Dunnhumby Automation Tool",
   "main": "main.js",
   "scripts": {

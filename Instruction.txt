@@ -8,6 +8,9 @@ npm install electron-builder@latest
 
 npm run dist (in Admin mode)
 
+compile python
+pyinstaller --onefile --noconsole python/excel.py
+
 update package.json
 {
   "name": "dunnhumby",
