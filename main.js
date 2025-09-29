@@ -8,9 +8,7 @@ const store = new Store();
 // keytar credentials
 const keytar = require("keytar");
 const SERVICE_NAME = "DunnhumbyAutomation"; // unique name for Windows Vault
-const LOGIN_URL =
-  "https://sso.dunnhumby.com/adfs/ls/?wtrealm=https%3A%2F%2Fgb.clientportal.a.dunnhumby.com%2FFNZ%2Fweb%2F&wctx=WsFedOwinState%3DRmcFwQLSZNgNN5RZWbnSwbrCXQfEC6HxfGNmQfhhVqowKaXaGibS_Kq1vFnfbVjLZHGgZFy1cda2OjbrwY2raGP4ydD87Zwp0XNOV6Lce_FHTrCQvxFgYRPgX5jGZaWiWeMYqA&wa=wsignin1.0&wreply=https%3A%2F%2Fgb.clientportal.a.dunnhumby.com%2FFNZ%2Fweb%2F";
-
+const LOGIN_URL = store.get("url") || "";
 // NOW import playwright and other dependencies
 const playwright = require("playwright");
 const { chromium, PlaywrightTimeoutError } = playwright;
@@ -18,6 +16,7 @@ const { chromium, PlaywrightTimeoutError } = playwright;
 // Other imports after playwright
 const downloadsFolder = app.getPath("downloads");
 const user_data_dir = path.join(app.getPath("userData"), "user-data");
+console.log("Downloads folder set to:", downloadsFolder);
 
 // Import your utility modules last
 const unzipFile = require("./unzipUtils");
@@ -277,14 +276,16 @@ async function selectGroupSelectionForPowerBi(page) {
       .click();
     console.log("--- Group selection and modal interaction finished. ---");
   } catch (error) {
-    if (error instanceof PlaywrightTimeoutError) {
+    const errorName = error.name || "";
+    const errorMessage = error.message || "";
+    if (errorName === "TimeoutError") {
       console.error(
-        `Timeout error while locating elements during group selection: ${error.message}`
+        `Timeout error while locating elements during group selection: ${errorMessage}`
       );
-      throw new Error(`Timeout error during group selection: ${error.message}`);
+      throw new Error(`Timeout error during group selection: ${errorMessage}`);
     } else {
-      console.error(`Error during group selection: ${error.message}`, error);
-      throw new Error(`Error during group selection: ${error.message}`);
+      console.error(`Error during group selection: ${errorMessage}`, error);
+      throw new Error(`Error during group selection: ${errorMessage}`);
     }
   }
 }
@@ -412,19 +413,21 @@ async function selectFileForDownload(page) {
     await page.locator("a#url_myworkspace").click();
     console.log("--- Returned to main workspace after download attempts. ---");
   } catch (error) {
-    if (error instanceof PlaywrightTimeoutError) {
+    const errorName = error.name || "";
+    const errorMessage = error.message || "";
+    if (errorName === "TimeoutError") {
       console.error(
-        `Timeout error during message center download process: ${error.message}`
+        `Timeout error during message center download process: ${errorMessage}`
       );
       throw new Error(
-        `Timeout error during message center download: ${error.message}`
+        `Timeout error during message center download: ${errorMessage}`
       );
     } else {
       console.error(
-        `Error during message center download process: ${error.message}`,
+        `Error during message center download process: ${errorMessage}`,
         error
       );
-      throw new Error(`Error during message center download: ${error.message}`);
+      throw new Error(`Error during message center download: ${errorMessage}`);
     }
   }
 }
@@ -548,23 +551,39 @@ async function expandIfNeeded(page) {
     }
 
     // Finally, click F&B
-    const fnbLink = page.getByRole("link", { name: "F&B", exact: true });
-    if (await fnbLink.isVisible()) {
-      await fnbLink.click();
-      console.log("🎯 Clicked F&B");
-      mainWindow.webContents.send("update-status", "F&B report selected.");
-    } else {
+    try {
+      const fnbLink = page.getByRole("link", { name: "F&B", exact: true });
+      if (await fnbLink.isVisible()) {
+        await fnbLink.click();
+        console.log("🎯 Clicked F&B");
+        mainWindow.webContents.send("update-status", "F&B report selected.");
+      } else {
+        const node = page.locator(
+          `span.dynatree-node:has(span.dynatree-expander):has(a.dynatree-title:has-text("9. Store Level"))`
+        );
+        const expander = node.locator("span.dynatree-expander");
+        await expander.click();
+        await page.waitForTimeout(500);
+        const fnbLink = page.getByRole("link", { name: "F&B", exact: true });
+        if (await fnbLink.isVisible()) {
+          await fnbLink.click();
+          console.log("🎯 Clicked F&B");
+          mainWindow.webContents.send("update-status", "F&B report selected.");
+        }
+      }
+    } catch (innerError) {
       throw new Error("❌ F&B link is not visible after expanding.");
     }
   } catch (error) {
-    if (error instanceof PlaywrightTimeoutError) {
-      console.error(`Timeout error during folder expansion: ${error.message}`);
-      throw new Error(
-        `Timeout error during folder expansion: ${error.message}`
-      );
+    const errorName = error.name || "";
+    const errorMessage = error.message || "";
+
+    if (errorName === "TimeoutError") {
+      console.error(`Timeout error during folder expansion: ${errorMessage}`);
+      throw new Error(`Timeout error during folder expansion: ${errorMessage}`);
     } else {
-      console.error(`Error during folder expansion: ${error.message}`, error);
-      throw new Error(`Error during folder expansion: ${error.message}`);
+      console.error(`Error during folder expansion: ${errorMessage}`, error);
+      throw new Error(`Error during folder expansion: ${errorMessage}`);
     }
   }
 }
@@ -675,24 +694,27 @@ async function acceptFile(page) {
       return await acceptFile(page);
     }
   } catch (error) {
-    if (error instanceof PlaywrightTimeoutError) {
+    const errorName = error.name || "";
+    const errorMessage = error.message || "";
+
+    if (errorName === "TimeoutError") {
       console.error(
-        `Timeout error while checking import status: ${error.message}`
+        `Timeout error while checking import status: ${errorMessage}`
       );
       return new ImportResult(
         false,
         true,
-        `Timeout error checking import status: ${error.message}`
+        `Timeout error checking import status: ${errorMessage}`
       );
     } else {
       console.error(
-        `An unexpected error occurred in acceptFile: ${error.message}`,
+        `An unexpected error occurred in acceptFile: ${errorMessage}`,
         error
       );
       return new ImportResult(
         false,
         true,
-        `An unexpected error occurred while checking import status: ${error.message}`
+        `An unexpected error occurred while checking import status: ${errorMessage}`
       );
     }
   }
@@ -751,7 +773,7 @@ async function importFile(page, filePath) {
       await resubmitReport(page);
 
       // small buffer before checking status
-      await page.waitForTimeout(5000);
+      await page.waitForTimeout(15000);
       await page.reload({ waitUntil: "networkidle" });
       // === begin resubmit check loop ===
       let running = false;
@@ -760,8 +782,8 @@ async function importFile(page, filePath) {
 
       while (!running && Date.now() - start < timeoutMs) {
         // reload page to get updated status
+        await page.waitForTimeout(15000); // small buffer
         await page.reload({ waitUntil: "networkidle" });
-        await page.waitForTimeout(5000); // small buffer
 
         const row = page.locator("table tbody tr").nth(0);
         const status_icon = row.locator('span[ng-show="!!objstatus"].icon');
@@ -801,22 +823,24 @@ async function importFile(page, filePath) {
       return new ImportResult(false, true, result.message);
     }
   } catch (error) {
-    if (error instanceof PlaywrightTimeoutError) {
-      console.error(`Timeout error during import process: ${error.message}`);
+    const errorName = error.name || "";
+    const errorMessage = error.message || "";
+    if (errorName === "TimeoutError") {
+      console.error(`Timeout error during import process: ${errorMessage}`);
       return new ImportResult(
         false,
         true,
-        `Timeout error during import: ${error.message}`
+        `Timeout error during import: ${errorMessage}`
       );
     } else {
       console.error(
-        `An unexpected error occurred during import process: ${error.message}`,
+        `An unexpected error occurred during import process: ${errorMessage}`,
         error
       );
       return new ImportResult(
         false,
         true,
-        `An unexpected error occurred during import: ${error.message}`
+        `An unexpected error occurred during import: ${errorMessage}`
       );
     }
   }
@@ -842,88 +866,93 @@ async function fileAvailable(page) {
       .locator("td")
       .nth(4)
       .locator("a:has-text('Store Level Report')");
-    let popupPage;
-    let download;
 
-    try {
-      // 1. Click the link and wait for the popup page to open
-      [popupPage] = await Promise.all([
-        page.waitForEvent("popup", { timeout: 60000 }),
-        file_link_locator.click(),
-      ]);
+    const MAX_RETRY_ATTEMPTS = 5;
+    let attemptCount = 0;
+    let popupPage = null;
+    let download = null;
 
-      console.log("✅ New tab opened for download.");
+    while (attemptCount < MAX_RETRY_ATTEMPTS) {
+      attemptCount++;
+      console.log(`📥 Download attempt ${attemptCount}/${MAX_RETRY_ATTEMPTS}`);
 
-      // 2. first download listener try on the popup page
-      download = await popupPage.waitForEvent("download", { timeout: 60000 });
-
-      // 3. Close the popup page after getting the download
-      if (popupPage && !popupPage.isClosed()) {
-        await popupPage.close();
-        console.log("✅ Download tab closed.");
-      }
-
-      // 4. Save the downloaded file
-      let newName = name;
-      let ext = path.extname(download.suggestedFilename());
-      if (!ext) {
-        ext = ".zip";
-      }
-
-      const finalNewPath = path.join(downloadsFolder, newName + ext);
-      await download.saveAs(finalNewPath);
-
-      console.log(`✅ Downloaded file: ${finalNewPath}`);
-      return finalNewPath;
-    } catch (e) {
-      console.error(`❌ Error during download: ${e.message}`);
-      console.log("Re-clicking the original link to try again...");
       try {
-        // Close the popup page if it exists}
-        if (popupPage) {
-          await popupPage.close();
-          console.log("✅ Popup page closed after error.");
-        }
-        // 1. Re-click the original link to open a new popup
+        // 1. Click the link and wait for the popup page to open
         [popupPage] = await Promise.all([
           page.waitForEvent("popup", { timeout: 60000 }),
           file_link_locator.click(),
         ]);
-        console.log("✅ Re-clicked original link, new popup opened.");
 
-        // 2. Wait for download on the new popup
-        download = await popupPage.waitForEvent("download", {
-          timeout: 60000,
-        });
-        console.log("✅ Download event captured after re-clicking!");
+        console.log("✅ New tab opened for download.");
 
-        // 3. Save the downloaded file
+        // 2. Wait for download listener on the popup page
+        download = await popupPage.waitForEvent("download", { timeout: 60000 });
+
+        // 3. Close the popup page after getting the download
+        if (popupPage && !popupPage.isClosed()) {
+          await popupPage.close();
+          console.log("✅ Download tab closed.");
+        }
+
+        // 4. Save the downloaded file
         let newName = name;
         let ext = path.extname(download.suggestedFilename());
         if (!ext) {
           ext = ".zip";
         }
+
         const finalNewPath = path.join(downloadsFolder, newName + ext);
         await download.saveAs(finalNewPath);
 
         console.log(`✅ Downloaded file: ${finalNewPath}`);
         return finalNewPath;
-      } catch (reclickError) {
+      } catch (e) {
         console.error(
-          `❌ Error during re-click download: ${reclickError.message}`
+          `❌ Download attempt ${attemptCount} failed: ${e.message}`
         );
-      }
-      // Make sure to close popup page if it exists
-      if (popupPage) {
-        await popupPage.close();
-        console.log("✅ Popup page closed after error.");
-      }
 
-      if (e.name === "TimeoutError") {
-        console.log("❌ Download event did not fire or timed out.");
+        // Clean up popup after failed attempt
+        try {
+          if (popupPage && !popupPage.isClosed()) {
+            await popupPage.close();
+            console.log(
+              `✅ Popup page closed after attempt ${attemptCount} error.`
+            );
+          }
+        } catch (closeError) {
+          console.error("Error closing popup:", closeError.message);
+        }
+
+        // Reset popupPage for next attempt
+        popupPage = null;
+
+        // Log specific error types
+        const errorName = e.name || "";
+        if (errorName === "TimeoutError") {
+          console.log(`❌ Timeout occurred on attempt ${attemptCount}.`);
+        }
+
+        // If this was the last attempt, return null
+        if (attemptCount >= MAX_RETRY_ATTEMPTS) {
+          console.error(
+            `❌ All ${MAX_RETRY_ATTEMPTS} download attempts failed.`
+          );
+          return null;
+        }
+
+        // Wait a bit before retrying (5 seconds)
+        console.log(
+          `⏳ Waiting 5 seconds before retry attempt ${attemptCount + 1}...`
+        );
+        await new Promise((resolve) => setTimeout(resolve, 5000));
       }
-      return null;
     }
+
+    // If loop completes without success
+    console.error(
+      `❌ Failed to download after ${MAX_RETRY_ATTEMPTS} attempts.`
+    );
+    return null;
   } else {
     console.log(`Status is not COMPLETE: ${status_text}. Returning null.`);
     return null;
@@ -932,7 +961,6 @@ async function fileAvailable(page) {
 
 /**
  * Executes the full download check process: login, expand, and attempt file download.
- * Translated from Python's checkDownload.py -> run_check.
  * @param {import('playwright').BrowserContext} context - The Playwright browser context.
  * @returns {Promise<string|null>} - Path to the downloaded file or null if process fails.
  */
@@ -1000,10 +1028,15 @@ async function runCheck(context) {
       await new Promise((resolve) => setTimeout(resolve, CHECK_INTERVAL_MS)); // Wait for 1 hour
     } catch (error) {
       console.error(`❌ Error during download attempt: ${error.message}`);
+
+      // Use string matching instead of instanceof to avoid import issues
+      const errorName = error.name || "";
+      const errorMessage = error.message || "";
+
       if (
-        error.name === "TimeoutError" ||
-        error.message.includes("locator") ||
-        error.message.includes("navigation")
+        errorName === "TimeoutError" ||
+        errorMessage.includes("locator") ||
+        errorMessage.includes("navigation")
       ) {
         console.log(
           "Retrying due to Playwright error. Waiting for 60 minutes..."
@@ -1012,6 +1045,11 @@ async function runCheck(context) {
       } else {
         console.error(
           "Unhandled critical error in runCheck, stopping attempts."
+        );
+        mainWindow.webContents.send(
+          "automation-error",
+          error.message,
+          "Sales Download Error"
         );
         throw error; // Re-throw critical errors
       }
@@ -1022,98 +1060,16 @@ async function runCheck(context) {
   console.log(
     `❌ Max download attempts (${MAX_DOWNLOAD_ATTEMPTS}) reached. File not downloaded.`
   );
+  mainWindow.webContents.send(
+    "automation-error",
+    "Max download attempts reached",
+    "Sales Download Error"
+  );
   return null; // Return null if max attempts reached without success
 }
 
-// --- IPC Main Handlers ---
-
-ipcMain.on("select-file-dialog", async (event) => {
-  const result = await dialog.showOpenDialog(mainWindow, {
-    properties: ["openFile"],
-    filters: [
-      { name: "Excel Files", extensions: ["xlsx", "xls"] },
-      { name: "All Files", extensions: ["*"] },
-    ],
-  });
-
-  if (!result.canceled && result.filePaths.length > 0) {
-    event.sender.send("selected-file", result.filePaths[0]);
-  } else {
-    event.sender.send("selected-file", null);
-  }
-});
-
-ipcMain.on("login-request", async (event) => {
-  mainWindow.webContents.send("update-status", "Attempting login...");
-  const page = await loginHumby();
-  if (page) {
-    event.sender.send("login-success");
-  } else {
-    event.sender.send("login-failure");
-  }
-});
-
-ipcMain.on("start-export", async (event) => {
-  if (!currentPage) {
-    const msg =
-      "Browser page not available. Login may have failed or timed out.";
-    mainWindow.webContents.send("automation-error", msg, "Automation Error");
-    event.sender.send("export-finished", false, msg);
-    return;
-  }
-  const result = await exportFile(currentPage);
-  event.sender.send("export-finished", result.success, result.message);
-
-  if (browserContext) {
-    await browserContext.close();
-    browserContext = null; // Clear the reference
-    currentPage = null; // Clear the reference
-    console.log("Playwright browser context closed after export.");
-  }
-});
-
-ipcMain.on("login-request-for-import", async (event, filePath) => {
-  mainWindow.webContents.send(
-    "update-status",
-    "Attempting login for import..."
-  );
-  const page = await loginHumby();
-  if (page) {
-    event.sender.send("login-success-for-import", filePath);
-  } else {
-    event.sender.send("login-failure");
-  }
-});
-
-// Locate this existing block in main.js
-ipcMain.on("start-import", async (event, filePath) => {
-  if (!currentPage) {
-    const msg =
-      "Browser page not available for import. Login may have failed or timed out.";
-    mainWindow.webContents.send("automation-error", msg, "Automation Error");
-    event.sender.send("import-finished", false, msg);
-    return;
-  }
-
-  mainWindow.webContents.send(
-    "update-status",
-    `Starting import of ${path.basename(filePath)}...`
-  );
-  const result = await importFile(currentPage, filePath); // Call the new function
-  event.sender.send("import-finished", result.success, result.message);
-
-  if (browserContext) {
-    await browserContext.close();
-    browserContext = null; // Clear the reference
-    currentPage = null; // Clear the reference
-    console.log("Playwright browser context closed after import.");
-  }
-});
-
-// IPC handler sales download file
-// IPC Handlers for Sales Download Flow (login, then start sales download)
-
-ipcMain.on("start-download-sales-file", async (event, args) => {
+// Run the sales download process
+async function runSalesDownload() {
   let finalFilePath = null;
   let message = "";
   let calendarMessage = "";
@@ -1287,6 +1243,123 @@ ipcMain.on("start-download-sales-file", async (event, args) => {
       browserContext = null; // Always nullify the global variable
     }
   }
+}
+
+// --- IPC Main Handlers ---
+
+ipcMain.on("select-file-dialog", async (event) => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ["openFile"],
+    filters: [
+      { name: "Excel Files", extensions: ["xlsx", "xls"] },
+      { name: "All Files", extensions: ["*"] },
+    ],
+  });
+
+  if (!result.canceled && result.filePaths.length > 0) {
+    event.sender.send("selected-file", result.filePaths[0]);
+  } else {
+    event.sender.send("selected-file", null);
+  }
+});
+
+ipcMain.on("login-request", async (event) => {
+  mainWindow.webContents.send("update-status", "Attempting login...");
+  const page = await loginHumby();
+  if (page) {
+    event.sender.send("login-success");
+  } else {
+    event.sender.send("login-failure");
+  }
+});
+
+ipcMain.on("start-export", async (event) => {
+  if (!currentPage) {
+    const msg =
+      "Browser page not available. Login may have failed or timed out.";
+    mainWindow.webContents.send("automation-error", msg, "Automation Error");
+    event.sender.send("export-finished", false, msg);
+    return;
+  }
+  const result = await exportFile(currentPage);
+  event.sender.send("export-finished", result.success, result.message);
+
+  if (browserContext) {
+    await browserContext.close();
+    browserContext = null; // Clear the reference
+    currentPage = null; // Clear the reference
+    console.log("Playwright browser context closed after export.");
+  }
+});
+
+ipcMain.on("login-request-for-import", async (event, filePath) => {
+  mainWindow.webContents.send(
+    "update-status",
+    "Attempting login for import..."
+  );
+  const page = await loginHumby();
+  if (page) {
+    event.sender.send("login-success-for-import", filePath);
+  } else {
+    event.sender.send("login-failure");
+  }
+});
+
+// Locate this existing block in main.js
+ipcMain.on("start-import", async (event, filePath) => {
+  if (!currentPage) {
+    const msg =
+      "Browser page not available for import. Login may have failed or timed out.";
+    mainWindow.webContents.send("automation-error", msg, "Automation Error");
+    event.sender.send("import-finished", false, msg);
+    return;
+  }
+
+  mainWindow.webContents.send(
+    "update-status",
+    `Starting import of ${path.basename(filePath)}...`
+  );
+  let result;
+  try {
+    result = await importFile(currentPage, filePath);
+    event.sender.send("import-finished", result.success, result.message);
+
+    if (result.success) {
+      // close browser context after import
+      if (browserContext) {
+        try {
+          await browserContext.close();
+        } catch (closeErr) {
+          console.error("Error closing browser context:", closeErr);
+        }
+        browserContext = null;
+        currentPage = null;
+      }
+      // ✅ Schedule sales download after 3 hours
+      const threeHoursMs = 3 * 60 * 60 * 1000;
+      mainWindow.webContents.send(
+        "update-status",
+        "⏳ Import successful, scheduling sales download in 3 hours..."
+      );
+      setTimeout(() => {
+        mainWindow.webContents.send(
+          "update-status",
+          "🚀 Triggering scheduled sales download..."
+        );
+        runSalesDownload(); // run sales download after 3 hours
+      }, threeHoursMs);
+    }
+  } catch (err) {
+    console.error("Import process crashed:", err);
+    event.sender.send("import-finished", false, err.message || "Unknown error");
+  }
+});
+
+// IPC handler sales download file
+// IPC Handlers for Sales Download Flow (login, then start sales download)
+
+ipcMain.on("start-download-sales-file", async (event, args) => {
+  await runSalesDownload();
 });
 
 ipcMain.handle("save-credentials", async (event, { username, password }) => {
@@ -1333,10 +1406,11 @@ ipcMain.handle("select-excel-file", async () => {
 // Save Excel and Destination folder paths
 ipcMain.handle(
   "save-paths",
-  async (event, { fcCalendar, destinationFolder }) => {
+  async (event, { fcCalendar, destinationFolder, url }) => {
     try {
       store.set("fcCalendar", fcCalendar);
       store.set("destinationFolder", destinationFolder);
+      store.set("url", url);
       return { success: true, message: "Paths saved successfully." };
     } catch (err) {
       return { success: false, message: err.message };
@@ -1349,5 +1423,6 @@ ipcMain.handle("get-paths", async () => {
   return {
     fcCalendar: store.get("fcCalendar") || "",
     destinationFolder: store.get("destinationFolder") || "",
+    url: store.get("url") || "",
   };
 });

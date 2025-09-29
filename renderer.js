@@ -18,6 +18,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const passwordInput = document.getElementById("passwordInput");
   const fcCalendar = document.getElementById("FSCalendar");
   const destinationFolder = document.getElementById("destinationFolder");
+  const urlInput = document.getElementById("urlInput");
 
   let selectedFile = null; // To store the path of the selected file
 
@@ -217,6 +218,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const storeResult = await ipcRenderer.invoke("save-paths", {
       fcCalendar: fcCalendar.value,
       destinationFolder: destinationFolder.value,
+      url: urlInput.value.trim(),
     });
     if (result.success && storeResult.success) {
       updateStatus("✅ Credentials and paths saved.");
@@ -252,6 +254,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Load stored paths on startup
   ipcRenderer.invoke("get-paths").then((paths) => {
+    if (paths.url) urlInput.value = paths.url;
     if (paths.fcCalendar) fcCalendar.value = paths.fcCalendar;
     if (paths.destinationFolder)
       destinationFolder.value = paths.destinationFolder;

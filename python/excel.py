@@ -9,7 +9,7 @@ def updateDateToMonday(file_path):
 
         today = datetime.date.today()
         # weekday(): Monday=0, Sunday=6
-        monday = today - datetime.timedelta(days=today.weekday()+7) # Last week's Monday
+        monday = today - datetime.timedelta(days=today.weekday()+14) # 2 weeks ago's Monday
 
         ws['A2'].value = monday
         wb.save(file_path)
