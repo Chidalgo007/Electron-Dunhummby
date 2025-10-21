@@ -205,10 +205,10 @@ h3 {
 .close-btn {
   border: none;
   background: transparent;
-  font-size: 15px;
+  font-size: 10px;
   position: absolute;
-  top: 5px;
-  right: 5px;
+  top: 3px;
+  right: 3px;
   cursor: pointer;
 }
 .modal-overlay {
@@ -306,10 +306,6 @@ input {
   align-items: center;
   text-align: left;
 }
-/* .input-container input {
-  width: 70%;
-  margin-right: 5px;
-} */
 .input-container button {
   background: #414141;
   border: none;
@@ -317,48 +313,3 @@ input {
   margin-bottom: 5px;
   cursor: pointer;
 }
-/* Add to your existing CSS */
-/*
-.overlay-content {
-  max-width: 500px;
-  padding: 20px;
-  background: white;
-  border-radius: 8px;
-}
-
-.overlay button {
-  margin: 10px 5px;
-  padding: 8px 16px;
-}
-
-
-.install-status {
-  margin: 15px 0;
-  min-height: 40px;
-  padding: 10px;
-  background: #f5f5f5;
-  border-radius: 4px;
-}
-
-#installStatus {
-  margin: 15px 0;
-  min-height: 20px;
-}
-#installStatus.success {
-  color: green;
-}
-
-.button-group {
-  display: flex;
-  gap: 10px;
-  margin-top: 15px;
-}
-
-.primary-button {
-  background: #4285f4;
-  color: white;
-}
-
-.secondary-button {
-  background: #f1f1f1;
-} */

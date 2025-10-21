@@ -18,6 +18,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const passwordInput = document.getElementById("passwordInput");
   const fcCalendar = document.getElementById("FSCalendar");
   const destinationFolder = document.getElementById("destinationFolder");
+  const downloadFolder = document.getElementById("downloadFolder");
   const urlInput = document.getElementById("urlInput");
 
   let selectedFile = null; // To store the path of the selected file
@@ -218,6 +219,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const storeResult = await ipcRenderer.invoke("save-paths", {
       fcCalendar: fcCalendar.value,
       destinationFolder: destinationFolder.value,
+      downloadFolder: downloadFolder.value,
       url: urlInput.value.trim(),
     });
     if (result.success && storeResult.success) {
@@ -239,6 +241,16 @@ document.addEventListener("DOMContentLoaded", () => {
         destinationFolder.value = "No folder selected";
       }
     });
+  document
+    .getElementById("browseDownloadButton")
+    .addEventListener("click", async () => {
+      const folderPath = await ipcRenderer.invoke("select-folder");
+      if (folderPath) {
+        downloadFolder.value = folderPath;
+      } else {
+        downloadFolder.value = "No folder selected";
+      }
+    });
 
   // Select path for FSCalendar
   document
@@ -256,6 +268,7 @@ document.addEventListener("DOMContentLoaded", () => {
   ipcRenderer.invoke("get-paths").then((paths) => {
     if (paths.url) urlInput.value = paths.url;
     if (paths.fcCalendar) fcCalendar.value = paths.fcCalendar;
+    if (paths.downloadFolder) downloadFolder.value = paths.downloadFolder;
     if (paths.destinationFolder)
       destinationFolder.value = paths.destinationFolder;
   });

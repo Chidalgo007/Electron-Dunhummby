@@ -61,12 +61,18 @@
       <div id="credentialsModal" class="modal-overlay hidden">
         <div class="modal-content">
           <button id="closeCredsModal" class="close-btn">❌</button>
-          <p class="modal-title">Enter Credentials</p>
-          <hr class="divider" />
           <input id="usernameInput" type="text" placeholder="Email" />
           <input id="passwordInput" type="password" placeholder="Password" />
           <input id="urlInput" type="text" placeholder="Enter URL..." />
 
+          <div class="input-container">
+            <input
+              id="downloadFolder"
+              type="text"
+              placeholder="Download Folder"
+            />
+            <button id="browseDownloadButton" class="browse-btn">📁</button>
+          </div>
           <div class="input-container">
             <input
               id="destinationFolder"

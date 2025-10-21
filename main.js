@@ -14,9 +14,7 @@ const playwright = require("playwright");
 const { chromium, PlaywrightTimeoutError } = playwright;
 
 // Other imports after playwright
-const downloadsFolder = app.getPath("downloads");
 const user_data_dir = path.join(app.getPath("userData"), "user-data");
-console.log("Downloads folder set to:", downloadsFolder);
 
 // Import your utility modules last
 const unzipFile = require("./unzipUtils");
@@ -25,7 +23,7 @@ const { runPythonExcelUpdate } = require("./excelUtils");
 const { moveFileToDestination } = require("./moveToDestination.js");
 
 // for sales file download iteration
-const CHECK_INTERVAL_MS = 1 * 90 * 60 * 1000; // 1 hour in milliseconds
+const CHECK_INTERVAL_MS = 1 * 30 * 60 * 1000; // 30 minutes in milliseconds
 const MAX_DOWNLOAD_ATTEMPTS = 5; // number of attempts
 
 let mainWindow;
@@ -220,6 +218,7 @@ async function downloadFile(page) {
     ]);
 
     const suggestedFilename = download.suggestedFilename();
+    const downloadsFolder = store.get("downloadFolder");
     const finalPath = path.join(downloadsFolder, suggestedFilename);
     await download.saveAs(finalPath);
     downloadPath = finalPath;
@@ -291,57 +290,36 @@ async function selectGroupSelectionForPowerBi(page) {
 }
 
 // helper function to select and download files from message center
-async function waitForInboxIncrease(
-  page,
-  increaseBy = 2,
-  timeoutMs = 300000,
-  refreshIntervalMs = 30000
-) {
+async function waitForInboxIncrease(page, increaseBy = 2, timeoutMs = 300000) {
   const start = Date.now();
+  const inbox = page.locator("#dh-header-inbox");
 
-  // Read initial count
-  const inboxLocator = page.locator("span#dh-header-inbox");
-  let initialCount = parseInt(
-    (await inboxLocator.getAttribute("data-count")) || "0",
-    10
-  );
-  const targetCount = initialCount + increaseBy;
-
-  console.log(
-    `📩 Starting inbox count: ${initialCount}, waiting until >= ${targetCount}`
-  );
+  // Read initial value
+  let initial = parseInt((await inbox.getAttribute("data-count")) || "0", 10);
+  const target = initial + increaseBy;
+  console.log(`📩 Inbox started at ${initial}, waiting until ${target}...`);
 
   while (Date.now() - start < timeoutMs) {
-    try {
-      // Refresh the page so the counter updates
-      await page.reload({ waitUntil: "networkidle" });
-      await page.waitForTimeout(3000); // buffer
+    // Reload page and read new count
+    await page.reload({ waitUntil: "networkidle" });
+    await page.waitForTimeout(2000);
 
-      const currentCount = parseInt(
-        (await inboxLocator.getAttribute("data-count")) || "0",
-        10
-      );
-      console.log(`🔄 Checked inbox: data-count=${currentCount}`);
+    const current = parseInt(
+      (await inbox.getAttribute("data-count")) || "0",
+      10
+    );
+    console.log(`🔄 Current inbox count: ${current}`);
 
-      if (currentCount >= targetCount) {
-        console.log(
-          `✅ Inbox count reached ${currentCount}, target was ${targetCount}`
-        );
-        return true;
-      }
-    } catch (err) {
-      console.warn("⚠️ Error while checking inbox count:", err.message);
+    if (current >= target) {
+      console.log(`✅ Inbox increased by ${increaseBy} (now ${current})`);
+      return true;
     }
 
-    // Wait before next refresh
-    await page.waitForTimeout(refreshIntervalMs);
+    // Wait 10 seconds before checking again
+    await page.waitForTimeout(10000);
   }
 
-  throw new Error(
-    `❌ Inbox count did not increase by ${increaseBy} within ${
-      timeoutMs / 1000 / 60
-    } minutes`
-  );
+  throw new Error(`❌ Inbox did not increase by ${increaseBy} within timeout.`);
 }
 
 /**
@@ -365,7 +343,7 @@ async function selectFileForDownload(page) {
     await page.reload({ waitUntil: "networkidle" });
 
     // Wait up to 5 minutes (300000 ms) for data-count=2, refresh every 30s
-    await waitForInboxIncrease(page, 2, 600000, 20000);
+    await waitForInboxIncrease(page, 2, 600000); // wait for 10 minutes max
 
     // Once ready, click the message center icon
     await page.locator("a:has(span#dh-header-inbox)").click();
@@ -500,14 +478,50 @@ class ImportResult {
  * Resubmits the report after import.
  * @param {import('playwright').Page} page - The Playwright page object.
  */
+// async function resubmitReport(page) {
+//   console.log("=== Starting resubmit process... ===");
+//   mainWindow.webContents.send("update-status", "Resubmitting report...");
+//   try {
+//     await page.locator(".btn.dropdown-toggle.undraggable").first().click();
+//     await page.locator(".context-menu-text").first().click();
+//     await page.waitForTimeout(2000);
+//     await page.locator("#btnSubmit").first().click();
+//     console.log("✅ Resubmit process initiated.");
+//     mainWindow.webContents.send("update-status", "Report resubmitted.");
+//   } catch (error) {
+//     console.error(`Error during report resubmission: ${error.message}`, error);
+//     throw new Error(`Error during report resubmission: ${error.message}`);
+//   }
+// }
+
 async function resubmitReport(page) {
   console.log("=== Starting resubmit process... ===");
   mainWindow.webContents.send("update-status", "Resubmitting report...");
   try {
-    await page.locator(".btn.dropdown-toggle.undraggable").first().click();
+    // Find the row containing "Store Level Report"
+    const storeReportRow = page
+      .locator('table tbody tr:has-text("Store Level Report")')
+      .first();
+
+    // Verify the row exists
+    const rowCount = await storeReportRow.count();
+    if (rowCount === 0) {
+      throw new Error("Store Level Report row not found");
+    }
+
+    console.log("✅ Found Store Level Report row");
+
+    // Click the actions dropdown within that specific row
+    await storeReportRow.locator(".btn.dropdown-toggle.undraggable").click();
+    await page.waitForTimeout(500);
+
+    // Click the resubmit option from context menu
     await page.locator(".context-menu-text").first().click();
     await page.waitForTimeout(2000);
+
+    // Click submit button
     await page.locator("#btnSubmit").first().click();
+
     console.log("✅ Resubmit process initiated.");
     mainWindow.webContents.send("update-status", "Report resubmitted.");
   } catch (error) {
@@ -775,37 +789,38 @@ async function importFile(page, filePath) {
       // small buffer before checking status
       await page.waitForTimeout(15000);
       await page.reload({ waitUntil: "networkidle" });
-      // === begin resubmit check loop ===
-      let running = false;
-      const timeoutMs = 300000; // 5 min timeout
-      const start = Date.now();
 
-      while (!running && Date.now() - start < timeoutMs) {
-        // reload page to get updated status
-        await page.waitForTimeout(15000); // small buffer
-        await page.reload({ waitUntil: "networkidle" });
+      // // === begin resubmit check loop === // not needed as client requested removal
+      // let running = false;
+      // const timeoutMs = 300000; // 5 min timeout
+      // const start = Date.now();
 
-        const row = page.locator("table tbody tr").nth(0);
-        const status_icon = row.locator('span[ng-show="!!objstatus"].icon');
-        const status_text =
-          (await status_icon.getAttribute("uib-tooltip")) || "";
+      // while (!running && Date.now() - start < timeoutMs) {
+      //   // reload page to get updated status
+      //   await page.waitForTimeout(15000); // small buffer
+      //   await page.reload({ waitUntil: "networkidle" });
 
-        console.log(`📊 Current status: ${status_text}`);
+      //   const row = page.locator("table tbody tr").nth(0);
+      //   const status_icon = row.locator('span[ng-show="!!objstatus"].icon');
+      //   const status_text =
+      //     (await status_icon.getAttribute("uib-tooltip")) || "";
 
-        if (status_text.toUpperCase().startsWith("RUNNING")) {
-          running = true;
-        } else {
-          console.log("⚠️ Status not RUNNING, resubmitting...");
-          await resubmitReport(page);
-        }
-      }
+      //   console.log(`📊 Current status: ${status_text}`);
 
-      if (!running) {
-        throw new Error(
-          "❌ Report never reached RUNNING status after resubmit."
-        );
-      }
-      // === end resubmit check loop ===
+      //   if (status_text.toUpperCase().startsWith("RUNNING")) {
+      //     running = true;
+      //   } else {
+      //     console.log("⚠️ Status not RUNNING, resubmitting...");
+      //     await resubmitReport(page);
+      //   }
+      // }
+
+      // if (!running) {
+      //   throw new Error(
+      //     "❌ Report never reached RUNNING status after resubmit."
+      //   );
+      // }
+      // // === end resubmit check loop ===
 
       mainWindow.webContents.send(
         "update-status",
@@ -900,7 +915,7 @@ async function fileAvailable(page) {
         if (!ext) {
           ext = ".zip";
         }
-
+        const downloadsFolder = store.get("downloadFolder");
         const finalNewPath = path.join(downloadsFolder, newName + ext);
         await download.saveAs(finalNewPath);
 
@@ -1074,6 +1089,7 @@ async function runSalesDownload() {
   let message = "";
   let calendarMessage = "";
   let success = false;
+  const downloadsFolder = store.get("downloadFolder");
   try {
     // Create browser context using system Chrome only
     if (!browserContext) {
@@ -1335,8 +1351,8 @@ ipcMain.on("start-import", async (event, filePath) => {
         browserContext = null;
         currentPage = null;
       }
-      // ✅ Schedule sales download after 3 hours
-      const threeHoursMs = 3 * 60 * 60 * 1000;
+      // ✅ Schedule sales download after 1 hour and 30 minutes
+      const oneHourThirtyMinutesMs = 1 * 90 * 60 * 1000;
       mainWindow.webContents.send(
         "update-status",
         "⏳ Import successful, scheduling sales download in 3 hours..."
@@ -1346,8 +1362,8 @@ ipcMain.on("start-import", async (event, filePath) => {
           "update-status",
           "🚀 Triggering scheduled sales download..."
         );
-        runSalesDownload(); // run sales download after 3 hours
-      }, threeHoursMs);
+        runSalesDownload(); // run sales download after 1 hour and 30 minutes
+      }, oneHourThirtyMinutesMs);
     }
   } catch (err) {
     console.error("Import process crashed:", err);
@@ -1406,10 +1422,11 @@ ipcMain.handle("select-excel-file", async () => {
 // Save Excel and Destination folder paths
 ipcMain.handle(
   "save-paths",
-  async (event, { fcCalendar, destinationFolder, url }) => {
+  async (event, { fcCalendar, downloadFolder, destinationFolder, url }) => {
     try {
       store.set("fcCalendar", fcCalendar);
       store.set("destinationFolder", destinationFolder);
+      store.set("downloadFolder", downloadFolder);
       store.set("url", url);
       return { success: true, message: "Paths saved successfully." };
     } catch (err) {
@@ -1423,6 +1440,7 @@ ipcMain.handle("get-paths", async () => {
   return {
     fcCalendar: store.get("fcCalendar") || "",
     destinationFolder: store.get("destinationFolder") || "",
+    downloadFolder: store.get("downloadFolder") || "",
     url: store.get("url") || "",
   };
 });
